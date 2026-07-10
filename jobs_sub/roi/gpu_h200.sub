@@ -1,0 +1,10 @@
+executable          	= /afs/cern.ch/user/t/tcostaes/project/traccc/extras/traccc_itk_throughput_mt_profiler_roi.sh
+arguments = -m 1 -t 16
+output = logs/out.$(ClusterID).$(ProcID).txt
+error  = logs/err.$(ClusterID).$(ProcID).txt
+log    = logs/log.$(ClusterID).log
+request_gpus        	= 1
+requirements = regexp("H200", TARGET.GPUs_DeviceName)
++JobFlavour         	= "longlunch"
+output_destination = root://eosuser.cern.ch//eos/user/t/tcostaes/traccc_outputs/roi/h200
+queue 1
