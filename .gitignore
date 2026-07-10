@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Results
+*.root
+*.csv
+*.json
+
+# Logs
+logs/
+*.log
+
+# Large generated files
+*.png
+*.pdf
