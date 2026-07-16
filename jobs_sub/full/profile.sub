@@ -1,10 +1,9 @@
-executable          	= /afs/cern.ch/user/t/tcostaes/project/traccc/extras/traccc_itk_throughput_mt_profiler.sh
-arguments = -m 22 -t 24
+executable  = /afs/cern.ch/user/t/tcostaes/project/cern-internship/jobs_sub/full/profile_h100.sh
 output = logs/out.$(ClusterID).$(ProcID).txt
 error  = logs/err.$(ClusterID).$(ProcID).txt
 log    = logs/log.$(ClusterID).log
 request_gpus        	= 1
 requirements = regexp("H100 NVL", TARGET.GPUs_DeviceName)
 +JobFlavour         	= "workday"
-output_destination = root://eosuser.cern.ch//eos/user/t/tcostaes/traccc_outputs/full/h100_nvl
+output_destination = root://eosuser.cern.ch//eos/user/t/tcostaes/traccc_outputs/profiling
 queue 1
