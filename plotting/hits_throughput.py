@@ -6,17 +6,9 @@ import ROOT as root
 import atlasplots as aplt
 
 def count_hits(filename):
-    """Count unique measurements in one event."""
-    measurements = set()
-
+    """Count hits (rows) in one event."""
     with open(filename, "r") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            key = (row["geometry_id"], row["measurement_id"])
-            measurements.add(key)
-
-    return len(measurements)
+        return sum(1 for _ in f) - 1   # subtract header
 
 
 def dataset_hits(directory, n_events=35):
@@ -39,10 +31,10 @@ def dataset_hits(directory, n_events=35):
     return avg_hits, hits
 
 def preprocess_data():
-    reg_file_path = "/eos/user/t/tcostaes/traccc_outputs/roi/a100.csv"
+    reg_file_path = "/eos/user/t/tcostaes/traccc_outputs/roi/v2_mldev02.csv"
     data_reg = np.genfromtxt(reg_file_path, delimiter=',', names=True, dtype=None, encoding='utf-8')
 
-    full_file_path = "/eos/user/t/tcostaes/traccc_outputs/full/a100.csv"
+    full_file_path = "/eos/user/t/tcostaes/traccc_outputs/full/v2_mldev02.csv"
     data_full = np.genfromtxt(full_file_path, delimiter=',', names=True, dtype=None, encoding='utf-8')
     return data_reg, data_full
 
@@ -74,7 +66,7 @@ def make_graph(x, y, yerr, name):
     graph.SetName(name)
     return graph
 
-# Change these paths
+
 roi_dir = "/eos/user/e/exochell/traccc/traccc_athena_plots/g200/traccc-athena/data/roiInputMuon"
 full_dir = "/eos/project/a/atlas-eftracking/GPU/ITk_data/traccc_standalone_data/ttbar_mu200"
 
@@ -98,12 +90,12 @@ def main():
     custom_purple = root.TColor.GetColor("#94a4a2")
 
     # Filter to only include up to 13 threads
-    mask_reg = x_reg <= 9
+    mask_reg = x_reg <= 13
     x_reg = x_reg[mask_reg]
     y_reg = y_reg[mask_reg]
     yerr_reg = yerr_reg[mask_reg]
 
-    mask_full = x_full <= 9
+    mask_full = x_full <= 13
     x_full = x_full[mask_full]
     y_full = y_full[mask_full]
     yerr_full = yerr_full[mask_full]
@@ -167,7 +159,7 @@ def main():
     tl = root.TLatex()
     tl.SetNDC()
     tl.SetTextSize(22)
-    tl.DrawLatex(0.55, 0.21, "#bf{NVIDIA A100-PCIE-40GB GPU}")
+    tl.DrawLatex(0.55, 0.21, "#bf{NVIDIA RTX 5000 Ada GPU}")
     tl.SetTextSize(20)
     tl.DrawLatex(0.55, 0.17, "#sqrt{s} = 14 TeV, <#mu> = 200, t#bar{t}")
     tl.DrawLatex(0.55, 0.13, "ITk Layout: 03-00-01")
@@ -211,7 +203,7 @@ def main():
     p1.Update()
     p2.Update()
 
-    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/hits_throughput_a100.pdf")
+    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/hits_throughput_mldev02_fixed.pdf")
 
 
 if __name__ == '__main__':
