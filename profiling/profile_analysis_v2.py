@@ -27,7 +27,8 @@ def processDF(df):
         "dram__bytes.sum.per_second",
         "gpu__time_duration.sum",
         "sm__throughput.avg.pct_of_peak_sustained_elapsed",
-        "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed"]
+        "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed",
+        "lts__t_sector_hit_rate.pct"]
 
     for col in metric_cols:
         if col in df.columns:
@@ -107,6 +108,7 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
     time_col = "gpu__time_duration.sum"
     sm_col = "sm__throughput.avg.pct_of_peak_sustained_elapsed"
     mem_col = "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed"
+    l2_col = "lts__t_sector_hit_rate.pct"
 
     # time-weighted throughput per kernel per event
     def weighted_avg(group, metric):
@@ -123,6 +125,7 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
             "time": getTime(x),
             "sm_throughput": weighted_avg(x, sm_col),
             "memory_throughput": weighted_avg(x, mem_col),
+            "l2_hit_rate": weighted_avg(x, l2_col),
             "bytes": (
                 getBytes(df_mem[(df_mem["event_id"] == x.name[0]) &
                                 (df_mem["Kernel Name"] == x.name[1])])
@@ -147,6 +150,7 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
             "time": ["mean", "std"],
             "sm_throughput": ["mean", "std"],
             "memory_throughput": ["mean", "std"],
+            "l2_hit_rate": ["mean", "std"],
             "bytes": ["mean", "std"],
             "time_bytes": ["mean", "std"],
             "gbytes_s": ["mean", "std"],
@@ -164,7 +168,65 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
     return top
 
 
-def getStats(fname, sorting_method, path_mem=None):
+def getKernelStatsPerCall(df, sorting_method="time_mean", df_mem=None, n=10):
+    """
+    Get average kernel metrics per kernel launch (call).
+    """
+
+    time_col = "gpu__time_duration.sum"
+    sm_col = "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+    mem_col = "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed"
+
+    per_call_metrics = (df.apply(lambda x: pd.Series({
+        "Kernel Name": x["Kernel Name"],
+        "time": getTime(x.to_frame().T),
+        "sm_throughput": x[sm_col],
+        "memory_throughput": x[mem_col],
+        "bytes": (
+            getBytes(df_mem.iloc[[x.name]]) 
+            if df_mem is not None and x.name < len(df_mem)
+            else np.nan if df_mem is not None 
+            else getBytes(x.to_frame().T)
+        ),
+        "time_bytes": (
+            getTime(df_mem.iloc[[x.name]]) 
+            if df_mem is not None and x.name < len(df_mem)
+            else np.nan if df_mem is not None 
+            else getTime(x.to_frame().T)
+        ),
+        "gbytes_s": (
+            x.get("dram__bytes.sum.per_second", np.nan) / 1e9
+        ),
+        "manual_gbytes_s": (
+            getBytes(df_mem.iloc[[x.name]]) / getTime(df_mem.iloc[[x.name]])
+            if df_mem is not None and x.name < len(df_mem)
+            else np.nan if df_mem is not None
+            else getBytes(x.to_frame().T) / getTime(x.to_frame().T)
+        ),
+        "gflop": getFLOPS(x.to_frame().T),
+        "gflop_s": getFLOPS(x.to_frame().T) / getTime(x.to_frame().T)
+    }), axis=1)
+    )
+    
+    kernel_stats = (per_call_metrics.groupby("Kernel Name").agg({
+            "time": ["mean", "std"],
+            "sm_throughput": ["mean", "std"],
+            "memory_throughput": ["mean", "std"],
+            "bytes": ["mean", "std"],
+            "time_bytes": ["mean", "std"],
+            "gbytes_s": ["mean", "std"],
+            "manual_gbytes_s": ["mean", "std"],
+            "gflop": ["mean", "std"],
+            "gflop_s": ["mean", "std"]}))
+
+    # flatten column names
+    kernel_stats.columns = ["_".join(col) for col in kernel_stats.columns]
+    # sort by average time and keep top n
+    top = (kernel_stats.sort_values(sorting_method, ascending=False).head(n))
+
+    return top
+
+def getStats(fname, sorting_method="time_mean", path_mem=None, kernel_function=getKernelStats):
     """
     Get overall statistics averaged per event.
     Get average statistics per kernel and per event by calling getKernelStats.
@@ -173,7 +235,7 @@ def getStats(fname, sorting_method, path_mem=None):
     df, dram_unit, time_unit, dram_rate_unit = processDF(df)
     df = convert_units(df, dram_unit, time_unit, dram_rate_unit)
 
-    # Remove cold runs
+    # Remove cold runs 
     df = df[df["event_id"] >= 5].copy()
     df["event_id"] -= 5
 
@@ -210,7 +272,7 @@ def getStats(fname, sorting_method, path_mem=None):
     print(f"Time: {df_overall_stats['time'].mean():.5f} "f"+/- {df_overall_stats['time'].std():.5f} s")
 
     # kernel statistics
-    df_kernel_stats = getKernelStats(df, sorting_method, df_mem)
+    df_kernel_stats = kernel_function(df, sorting_method, df_mem)
     
     return df_overall_stats, df_kernel_stats,  df_overall_stats["time"].mean()
 
@@ -223,18 +285,20 @@ def saveKernelStats(kernel_stats, total_time, filename):
     # save
     df.to_csv(filename, index=False)
 
+
+
 def main():
-    fname = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/mldev02_full_1t_10ev_memory_check_v2.csv"
-    #path_mem = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/lxplus_full_1t_10ev_mem.csv"
+    fname = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/lxplus_full_1t_10ev_data_transfer_check2.csv"
+    #path_mem = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/h100_full_1t_10ev_mem.csv"
     path_mem = None
     # OPTIONS: "time_mean", "sm_throughput_mean", "memory_throughput_mean", 
     # "bytes_mean", "time_bytes_mean", "gflop_mean", "gbytes_s_mean", "manual_gbytes_s_mean", "gflop_s_mean"
-    sorting_method="memory_throughput_mean"
-    overall_stats, kernel_stats, total_time = getStats(fname, sorting_method, path_mem)
+    sorting_method="manual_gbytes_s_mean"
+    overall_stats, kernel_stats, total_time = getStats(fname, sorting_method, path_mem, kernel_function=getKernelStats)
     print("\nKernel statistics:")
     print(kernel_stats)
     
-    csv_filename = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/kernel_stats/mldev02_full_memory_check_v2_mem.csv"
+    csv_filename = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/kernel_stats/lxplus_full_data_transfer_check2.csv"
     saveKernelStats(kernel_stats, total_time, filename=csv_filename)
 
 if __name__ == "__main__":
