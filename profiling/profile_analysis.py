@@ -9,6 +9,8 @@ def processDF(df):
     dram_unit = units.get("dram__bytes.sum", None)
     time_unit = units.get("gpu__time_duration.sum", None)
     dram_rate_unit = units.get("dram__bytes.sum.per_second", None)
+    l1tex_unit = units.get("l1tex__t_bytes.sum", None)
+    lts_unit = units.get("lts__t_bytes.sum", None)
 
     # remove empty/unit rows
     df = df[df["Kernel Name"].notna()].reset_index(drop=True)
@@ -17,10 +19,10 @@ def processDF(df):
     df["is_event_start"] = df["Kernel Name"].str.contains("ccl_kernel")
     df["event_id"] = (df.groupby("Stream")["is_event_start"].cumsum() - 1)
 
-    # remove unessessary columns
+    # remove unessessary columns (do not drop Stream)
     cols_to_drop = [
         "Process ID", "Process Name", "Host Name",
-        "Context", "Stream", "Device", "CC", "Section Name", "is_event_start"]
+        "Context", "Device", "CC", "Section Name"]
     df = df.drop(columns=[c for c in cols_to_drop if c in df.columns])
     
     # convert metric columns to numbers
@@ -33,21 +35,30 @@ def processDF(df):
         "gpu__time_duration.sum",
         "sm__throughput.avg.pct_of_peak_sustained_elapsed",
         "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed",
-        "lts__t_sector_hit_rate.pct"]
+        "lts__t_bytes.sum",
+        "l1tex__t_bytes.sum"]
 
     for col in metric_cols:
         if col in df.columns:
             df[col] = (df[col].astype(str).str.replace(",", ""))
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    return df, dram_unit, time_unit, dram_rate_unit
+    return df, dram_unit, time_unit, dram_rate_unit, l1tex_unit, lts_unit
 
 def _sum_or_nan(df, col):
     """Return column sum or NaN if column is missing."""
     return df[col].sum() if col in df.columns else np.nan
 
+def remove_cold_events(df, n_cold=5):
+    """Removes cold run events"""
+    ccl = df[df["is_event_start"]]
+    cold_events = list(zip(ccl.iloc[:n_cold]["Stream"], ccl.iloc[:n_cold]["event_id"]))
+    df = df[~df[["Stream", "event_id"]].apply(tuple, axis=1).isin(cold_events)].copy()
 
-def convert_units(df, dram_unit, time_unit, dram_rate_unit):
+    return df
+
+
+def convert_units(df, dram_unit, time_unit, dram_rate_unit, l1tex_unit, lts_unit):
     """
     Convert units to bytes and seconds.
     Use after processing data frame and before metric retrieving functions.
@@ -55,6 +66,8 @@ def convert_units(df, dram_unit, time_unit, dram_rate_unit):
     dram_scale = {"byte": 1, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9}
     time_scale = {"ns": 1e-9, "us": 1e-6, "ms": 1e-3, "s": 1}
     dram_rate_scale = {"byte/s": 1, "Kbyte/s": 1e3, "Mbyte/s": 1e6, "Gbyte/s": 1e9,}
+    l1tex_scale = {"byte": 1, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9}
+    lts_scale = {"byte": 1, "Kbyte": 1e3, "Mbyte": 1e6, "Gbyte": 1e9}
 
     if "dram__bytes.sum" in df.columns:
         df["dram__bytes.sum"] *= dram_scale[dram_unit]
@@ -64,6 +77,12 @@ def convert_units(df, dram_unit, time_unit, dram_rate_unit):
 
     if "dram__bytes.sum.per_second" in df.columns:
         df["dram__bytes.sum.per_second"] *= dram_rate_scale[dram_rate_unit]
+
+    if "l1tex__t_bytes.sum" in df.columns:
+        df["l1tex__t_bytes.sum"] *= l1tex_scale[l1tex_unit]
+
+    if "lts__t_bytes.sum" in df.columns:
+        df["lts__t_bytes.sum"] *= lts_scale[lts_unit]
 
     return df
 
@@ -91,6 +110,15 @@ def getBytes(df, event_id=None):
 
     return bytes_transferred / 1e9
 
+def getBytesL1LTS(df, event_id=None):
+    """Get amount of GB requested from L1 and L2"""
+    if event_id is not None:
+        df = df[df["event_id"] == event_id]
+
+    l1tex_bytes = _sum_or_nan(df, "l1tex__t_bytes.sum") 
+    lts_bytes = _sum_or_nan(df, "lts__t_bytes.sum") 
+
+    return l1tex_bytes/1e9, lts_bytes/1e9
 
 def getTime(df, event_id=None):
     """Get run execution time"""
@@ -121,28 +149,43 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
 
     # collapse multiple launches of the same kernel within each processed
     # event into a single set of per-event metrics.
-    per_event_metrics = (df.groupby(["event_id", "Kernel Name"]).apply(lambda x: pd.Series({
+    per_event_metrics = (df.groupby(["Stream", "event_id", "Kernel Name"])).apply(lambda x: pd.Series({
             "time": getTime(x),
             "sm_throughput": weighted_avg(x, sm_col),
             "memory_throughput": weighted_avg(x, mem_col),
             "bytes": (
-                getBytes(df_mem[(df_mem["event_id"] == x.name[0]) &
-                                (df_mem["Kernel Name"] == x.name[1])])
+                getBytes(df_mem[(df_mem["Stream"] == x.name[0]) &
+                                (df_mem["event_id"] == x.name[1]) &
+                                (df_mem["Kernel Name"] == x.name[2])])
                 if df_mem is not None else getBytes(x)),
+            "l1_bytes": (
+                getBytesL1LTS(df_mem[
+                    (df_mem["Stream"] == x.name[0]) &
+                    (df_mem["event_id"] == x.name[1]) &
+                    (df_mem["Kernel Name"] == x.name[2])])[0]
+                if df_mem is not None else getBytesL1LTS(x)[0]),
+            "lts_bytes": (
+                getBytesL1LTS(df_mem[(df_mem["Stream"] == x.name[0]) &
+                                    (df_mem["event_id"] == x.name[1]) &
+                                    (df_mem["Kernel Name"] == x.name[2])])[1]
+                if df_mem is not None else getBytesL1LTS(x)[1]),
             "time_bytes": (
-                getTime(df_mem[(df_mem["event_id"] == x.name[0]) &
-                                (df_mem["Kernel Name"] == x.name[1])])
+                getTime(df_mem[(df_mem["Stream"] == x.name[0]) &
+                                (df_mem["event_id"] == x.name[1]) &
+                                (df_mem["Kernel Name"] == x.name[2])])
                 if df_mem is not None else getTime(x)),
             "gbytes_s":  weighted_avg(x, "dram__bytes.sum.per_second") / 1e9,
             "manual_gbytes_s": (
-                getBytes(df_mem[(df_mem["event_id"] == x.name[0]) &
-                                (df_mem["Kernel Name"] == x.name[1])]) /
-                getTime(df_mem[(df_mem["event_id"] == x.name[0]) &
-                            (df_mem["Kernel Name"] == x.name[1])])
+                getBytes(df_mem[(df_mem["Stream"] == x.name[0]) &
+                                (df_mem["event_id"] == x.name[1]) &
+                                (df_mem["Kernel Name"] == x.name[2])]) /
+                getTime(df_mem[(df_mem["Stream"] == x.name[0]) &
+                                (df_mem["event_id"] == x.name[1]) &
+                                (df_mem["Kernel Name"] == x.name[2])])
                 if df_mem is not None else getBytes(x) / getTime(x)),
             "gflop": getFLOPS(x),
             "gflop_s": getFLOPS(x) / getTime(x)
-            }),  include_groups=False).reset_index())
+            }),  include_groups=False).reset_index()
 
     # average each kernel's per-event metrics across all processed events
     kernel_stats = (per_event_metrics.groupby("Kernel Name").agg({
@@ -150,6 +193,8 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
             "sm_throughput": ["mean", "std"],
             "memory_throughput": ["mean", "std"],
             "bytes": ["mean", "std"],
+            "l1_bytes": ["mean", "std"],
+            "lts_bytes": ["mean", "std"],
             "time_bytes": ["mean", "std"],
             "gbytes_s": ["mean", "std"],
             "manual_gbytes_s": ["mean", "std"],
@@ -230,38 +275,37 @@ def getStats(fname, sorting_method="time_mean", path_mem=None, kernel_function=g
     Get average statistics per kernel and per event by calling getKernelStats.
     """
     df = pd.read_csv(fname, low_memory=False)
-    df, dram_unit, time_unit, dram_rate_unit = processDF(df)
-    df = convert_units(df, dram_unit, time_unit, dram_rate_unit)
+    df, dram_unit, time_unit, dram_rate_unit, l1tex_unit, lts_unit = processDF(df)
+    df = convert_units(df, dram_unit, time_unit, dram_rate_unit, l1tex_unit, lts_unit)
 
-    # Remove cold runs 
-    df = df[df["event_id"] >= 5].copy()
-    df["event_id"] -= 5
-
+    # remove cold runs
+    df = remove_cold_events(df, 5)
+    
     df_mem = None
     if path_mem is not None:
         df_mem = pd.read_csv(path_mem, low_memory=False)
-        df_mem, dram_unit_mem, time_unit_mem, dram_rate_unit_mem = processDF(df_mem)
+        df_mem, dram_unit_mem, time_unit_mem, dram_rate_unit_mem, l1tex_unit_mem, lts_unit_mem = processDF(df_mem)
         # convert units to bytes and seconds
-        df_mem = convert_units(df_mem, dram_unit_mem, time_unit_mem, dram_rate_unit_mem)
+        df_mem = convert_units(df_mem, dram_unit_mem, time_unit_mem, dram_rate_unit_mem, l1tex_unit_mem, lts_unit_mem)
         # remove cold runs
-        df_mem = df_mem[df_mem["event_id"] >= 5].copy()
-        df_mem["event_id"] -= 5
+        df_mem = remove_cold_events(df_mem, 5)
 
+    events = df[["Stream", "event_id"]].drop_duplicates()
     result=[]
-    for i in range(df.event_id.max() + 1):
-        tmp = df[df.event_id == i]
+    for stream, event_id in events.itertuples(index=False):
+        tmp = df[(df["Stream"] == stream) & (df["event_id"] == event_id)]
         flops = getFLOPS(tmp)
         time = getTime(tmp)
         if path_mem is not None:
-            tmp_mem = df_mem[df_mem["event_id"] == i]
+            tmp_mem = df_mem[(df_mem["Stream"] == stream) & (df_mem["event_id"] == event_id)]
             bytes_transferred = getBytes(tmp_mem)
             time_bytes = getTime(tmp_mem)
         else:
             bytes_transferred = getBytes(tmp)
             time_bytes = getTime(tmp)
-        result.append([i, bytes_transferred, time_bytes, flops, time])
+        result.append([stream, event_id, bytes_transferred, time_bytes, flops, time])
 
-    df_overall_stats = pd.DataFrame(result, columns=["event_id", "gb", "time_bytes", "gflop", "time"])
+    df_overall_stats = pd.DataFrame(result, columns=["Stream", "event_id", "gb", "time_bytes", "gflop", "time"])
 
     print("Overall event statistics:")
     print(f"GB transferred: {df_overall_stats['gb'].mean():.2f} "f"+/- {df_overall_stats['gb'].std():.2f} GB")
@@ -286,9 +330,12 @@ def saveKernelStats(kernel_stats, total_time, filename):
 
 
 def main():
-    fname = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/h100_full_4t_10ev.csv"
-    path_mem = "/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/raw_for_analysis/h100_full_4t_10ev_mem.csv"
-    #path_mem = None
+    nthreads = 4
+    gpu = "lxplus"
+    data = "full"
+    fname = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_10ev.csv"
+    path_mem = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_10ev_mem.csv"
+    #path_mem = None 
     # OPTIONS: "time_mean", "sm_throughput_mean", "memory_throughput_mean", 
     # "bytes_mean", "time_bytes_mean", "gflop_mean", "gbytes_s_mean", "manual_gbytes_s_mean", "gflop_s_mean"
     sorting_method="time_mean"
@@ -296,7 +343,7 @@ def main():
     print("\nKernel statistics:")
     print(kernel_stats)
     
-    csv_filename = "/eos/user/t/tcostaes/traccc_outputs/profiling/4t_10ev_1rep/kernel_stats/time_ordered/h100_full.csv"
+    csv_filename = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/kernel_stats/time_ordered/{gpu}_{data}.csv"
     saveKernelStats(kernel_stats, total_time, filename=csv_filename)
 
 if __name__ == "__main__":
