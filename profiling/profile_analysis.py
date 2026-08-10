@@ -330,12 +330,16 @@ def saveKernelStats(kernel_stats, total_time, filename):
 
 
 def main():
-    nthreads = 4
-    gpu = "lxplus"
+    # setup parameters
+    nthreads = 1
+    nevent = 100
+    gpu = "mldev02"
     data = "full"
-    fname = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_10ev.csv"
-    path_mem = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_10ev_mem.csv"
-    #path_mem = None 
+    # paths
+    fname = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_{nevent}ev.csv"
+    #path_mem = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_{nevent}ev_mem.csv"
+    path_mem = None 
+
     # OPTIONS: "time_mean", "sm_throughput_mean", "memory_throughput_mean", 
     # "bytes_mean", "time_bytes_mean", "gflop_mean", "gbytes_s_mean", "manual_gbytes_s_mean", "gflop_s_mean"
     sorting_method="time_mean"
@@ -343,7 +347,7 @@ def main():
     print("\nKernel statistics:")
     print(kernel_stats)
     
-    csv_filename = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_10ev_1rep/kernel_stats/time_ordered/{gpu}_{data}.csv"
+    csv_filename = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/kernel_stats/time_ordered/{gpu}_{data}.csv"
     saveKernelStats(kernel_stats, total_time, filename=csv_filename)
 
 if __name__ == "__main__":
