@@ -138,6 +138,9 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
     sm_col = "sm__throughput.avg.pct_of_peak_sustained_elapsed"
     mem_col = "gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed"
 
+    # total event time for each processed event
+    event_times = (df.groupby(["Stream", "event_id"])[time_col].sum().rename("total_event_time"))
+
     # time-weighted throughput per kernel per event
     def weighted_avg(group, metric):
         if metric not in group.columns or time_col not in group.columns:
@@ -149,7 +152,7 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
 
     # collapse multiple launches of the same kernel within each processed
     # event into a single set of per-event metrics.
-    per_event_metrics = (df.groupby(["Stream", "event_id", "Kernel Name"])).apply(lambda x: pd.Series({
+    per_event_metrics = (df.groupby(["Stream", "event_id", "Kernel Name"]).apply(lambda x: pd.Series({
             "time": getTime(x),
             "sm_throughput": weighted_avg(x, sm_col),
             "memory_throughput": weighted_avg(x, mem_col),
@@ -185,11 +188,18 @@ def getKernelStats(df, sorting_method="time_mean", df_mem=None, n=10):
                 if df_mem is not None else getBytes(x) / getTime(x)),
             "gflop": getFLOPS(x),
             "gflop_s": getFLOPS(x) / getTime(x)
-            }),  include_groups=False).reset_index()
+            }),  include_groups=False).reset_index())
+
+    # add total event time to per-event metrics
+    per_event_metrics = per_event_metrics.merge(event_times, on=["Stream", "event_id"])
+
+    # kernel contribution to total event time, calculated per event
+    per_event_metrics["time_percentage"] = (per_event_metrics["time"] / per_event_metrics["total_event_time"] * 100)
 
     # average each kernel's per-event metrics across all processed events
     kernel_stats = (per_event_metrics.groupby("Kernel Name").agg({
             "time": ["mean", "std"],
+            "time_percentage": ["mean", "std"],
             "sm_throughput": ["mean", "std"],
             "memory_throughput": ["mean", "std"],
             "bytes": ["mean", "std"],
@@ -316,39 +326,35 @@ def getStats(fname, sorting_method="time_mean", path_mem=None, kernel_function=g
     # kernel statistics
     df_kernel_stats = kernel_function(df, sorting_method, df_mem)
     
-    return df_overall_stats, df_kernel_stats,  df_overall_stats["time"].mean()
+    return df_overall_stats, df_kernel_stats
 
-def saveKernelStats(kernel_stats, total_time, filename):
+def saveKernelStats(kernel_stats, filename):
 
     df = kernel_stats.reset_index()
-    df["Kernel Name"] = df["Kernel Name"]
-    # percentages
-    df["time_percentage"] = (df["time_mean"] / total_time * 100)
-    # save
     df.to_csv(filename, index=False)
 
 
 
 def main():
     # setup parameters
-    nthreads = 1
-    nevent = 100
-    gpu = "mldev02"
+    nthreads = 4
+    nevent = 10
+    gpu = "lxplus"
     data = "full"
     # paths
     fname = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_{nevent}ev.csv"
-    #path_mem = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_{nevent}ev_mem.csv"
-    path_mem = None 
+    path_mem = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/raw_for_analysis/{gpu}_{data}_{nthreads}t_{nevent}ev_mem.csv"
+    #path_mem = None 
 
     # OPTIONS: "time_mean", "sm_throughput_mean", "memory_throughput_mean", 
     # "bytes_mean", "time_bytes_mean", "gflop_mean", "gbytes_s_mean", "manual_gbytes_s_mean", "gflop_s_mean"
     sorting_method="time_mean"
-    overall_stats, kernel_stats, total_time = getStats(fname, sorting_method, path_mem, kernel_function=getKernelStats)
+    overall_stats, kernel_stats = getStats(fname, sorting_method, path_mem, kernel_function=getKernelStats)
     print("\nKernel statistics:")
     print(kernel_stats)
     
     csv_filename = f"/eos/user/t/tcostaes/traccc_outputs/profiling/{nthreads}t_{nevent}ev_1rep/kernel_stats/time_ordered/{gpu}_{data}.csv"
-    saveKernelStats(kernel_stats, total_time, filename=csv_filename)
+    saveKernelStats(kernel_stats, filename=csv_filename)
 
 if __name__ == "__main__":
     main()
