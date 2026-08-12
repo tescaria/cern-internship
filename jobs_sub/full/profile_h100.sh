@@ -21,16 +21,17 @@ gpu__time_duration.sum,\
 smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,\
 smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,\
 smsp__sass_thread_inst_executed_op_fmul_pred_on.sum, \
-dram__bytes.sum.per_second, \
-dram__bytes.sum"
+dram__bytes.sum, \
+l1tex__t_bytes.sum, \
+lts__t_bytes.sum"
 
 ncu \
         --target-processes all \
-        --metrics "$METRICS" \
+        --metrics "dram__bytes.sum","l1tex__t_bytes.sum","lts__t_bytes.sum","gpu__time_duration.sum" \
         -f \
-        -o h100_full_1t_10ev \
+        -o h100_full_8t_32ev_mem \
         /afs/cern.ch/user/t/tcostaes/project/traccc/extras/traccc_itk_throughput_mt_profiler.sh \
-        -m 1 \
-        -t 1 \
+        -m 8 \
+        -t 8 \
         -r 1 \
-        -c profile_h100_1t_10ev.csv
+        -c profile_h100_8t_32ev_mem.csv

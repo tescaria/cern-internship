@@ -55,7 +55,7 @@ def plot_l1_dram(df):
 
 def main():
 
-    df = pd.read_csv("/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/kernel_stats/cache_readouts_plots.csv")
+    df = pd.read_csv("/eos/user/t/tcostaes/traccc_outputs/profiling/1t_10ev_1rep/kernel_stats/cache_readouts_plots_full.csv")
     plot_dram(df)
     plot_l1_dram(df)
 
