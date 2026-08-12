@@ -55,21 +55,17 @@ def main():
     c = root.TCanvas("c", "Throughput", 800, 600)
     c.SetGridx()
     c.SetGridy()
-    c.SetLeftMargin(0.12)
+    c.SetLeftMargin(0.13)
     c.SetRightMargin(0.05)
-    c.SetTopMargin(0.05)
+    c.SetTopMargin(0.06)
     c.SetBottomMargin(0.15)
 
-    colors = [
-        root.kBlue,
-        root.kRed,
-        #root.kGreen + 2,
-        #root.kMagenta + 1,
-        #root.kOrange + 7,
-        root.kCyan + 2,
-        #root.kCyan - 7
-    ]
-
+    #colors = [root.kBlue, root.kRed, root.kGreen + 2, root.kMagenta + 1, root.kOrange + 7, root.kCyan + 2, root.kCyan - 7]
+    # custom colours 
+    blue = root.TColor.GetColor("#1f77b4")    # tab:blue
+    orange = root.TColor.GetColor("#ff7f0e")  # tab:orange
+    green = root.TColor.GetColor("#2ca02c")   # tab:green
+    colors = [blue, orange, green]
 
     all_x = []
     all_y = []
@@ -77,7 +73,7 @@ def main():
     for path in gpu_files.values():
         data = preprocess_data(path)
         x, y, _ = aggregate_by_threads(data)
-        mask = x <= 15
+        mask = x <= 12
         x = x[mask]
         y = y[mask]
         all_x.extend(x)
@@ -93,9 +89,11 @@ def main():
     h_frame.GetYaxis().SetTitle("Throughput [events/s]")
     h_frame.GetYaxis().SetTitleOffset(1.6)
 
-    #leg = root.TLegend(0.15, 0.65, 0.40, 0.88)
-    leg = root.TLegend(0.60, 0.25, 0.90, 0.48)
-    leg.SetTextSize(18) #12
+    # legend for full case
+    leg = root.TLegend(0.57, 0.35, 0.87, 0.48)
+    # legend for regional case
+    #leg = root.TLegend(0.15, 0.75, 0.45, 0.88)
+    leg.SetTextSize(18) 
     leg.SetBorderSize(0)
 
     graphs = []
@@ -105,7 +103,7 @@ def main():
 
         data = preprocess_data(path)
         x, y, yerr = aggregate_by_threads(data)
-        mask = x <= 15
+        mask = x <= 12
         x = x[mask]
         y = y[mask]
         yerr = yerr[mask]
@@ -134,7 +132,16 @@ def main():
 
     leg.Draw()
 
-    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/full_3gpu_comparison.pdf")
+    # ATLAS-style annotation
+    tl = root.TLatex()
+    tl.SetNDC()
+    tl.SetTextSize(22)
+    tl.DrawLatex(0.60, 0.29, "#bf{Full Detector Data}")
+    tl.SetTextSize(20)
+    tl.DrawLatex(0.60, 0.25, "#sqrt{s} = 14 TeV, <#mu> = 200, t#bar{t}")
+    tl.DrawLatex(0.60, 0.21, "ITk Layout: 03-00-01")
+
+    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/throughput/events/full_3gpu.pdf")
 
 
 if __name__ == '__main__':
