@@ -19,9 +19,10 @@ def plot_dram(df):
     # plot
     plt.figure(figsize=(12, 9))
     sns.barplot(data=df_plot, x="DRAM Accessed [MB]", y="Kernel_Name", hue="GPU")
-    plt.xlabel("DRAM Accessed [MB]", fontsize=13)
-    plt.ylabel("Kernel", fontsize=13)
-    plt.legend(title="GPU", fontsize=12)
+    plt.xlabel("DRAM Accessed [MB]", fontsize=17)
+    plt.ylabel("Kernel", fontsize=17)
+    plt.yticks(fontsize=15)
+    plt.legend(title="GPU", fontsize=14)
     plt.title("DRAM Traffic by Kernel - Full Data (1 thread)", fontsize=14)
     plt.tight_layout()
     plt.savefig("/eos/user/t/tcostaes/traccc_outputs/plots/profiling/cache_readouts_dram.png", dpi=300)
@@ -43,9 +44,9 @@ def plot_l1_dram(df):
     # colour = kernel, marker = GPU
     sns.scatterplot(data=df_plot,   x="L1", y="DRAM", hue="Kernel_Name", style="GPU", s=150)
 
-    plt.xlabel("L1 requested [MB]")
-    plt.ylabel("DRAM accessed [MB]")
-    plt.title("DRAM Traffic vs L1 Requested — Full Data (1 thread)")
+    plt.xlabel("L1 requested [MB]", fontsize=17)
+    plt.ylabel("DRAM accessed [MB]", fontsize=17)
+    plt.title("DRAM Traffic vs L1 Requested — Full Data (1 thread)", fontsize=18)
     plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 
     plt.tight_layout()

@@ -53,25 +53,29 @@ def plot_gbytes_s(df_full, df_roi, theoretical_gbytes, output_path=None, nthread
     axes[1].barh([i + height for i in y], df_roi["h100_relative"], height=height, xerr=df_roi["h100_relative_std"],
         capsize=4, color=colours["H100 NVL"])
 
-    axes[0].set_title("Full Data")
-    axes[1].set_title("RoI")
+    axes[0].set_title("Full Data", fontsize=18)
+    axes[1].set_title("RoI", fontsize=18)
 
     axes[0].set_yticks(y)
-    axes[0].set_yticklabels(df_full["Kernel_Name"])
+    axes[0].set_yticklabels(df_full["Kernel_Name"], fontsize=15)
 
-    axes[0].set_ylabel("Kernel", fontsize=13)
-    axes[0].set_xlabel("Achieved DRAM Bandwidth / Theoretical Peak [%]", fontsize=13)
-    axes[1].set_xlabel("Achieved DRAM Bandwidth / Theoretical Peak [%]", fontsize=13)
+    axes[0].set_ylabel("Kernel", fontsize=17)
+    axes[0].set_xlabel("Achieved DRAM Bandwidth / Theoretical Peak [%]", fontsize=17)
+    axes[1].set_xlabel("Achieved DRAM Bandwidth / Theoretical Peak [%]", fontsize=17)
+    
+    # Increase x-axis tick labels
+    axes[0].tick_params(axis="x", labelsize=15)
+    axes[1].tick_params(axis="x", labelsize=15)
 
     axes[0].set_xlim(0, 90)
     axes[1].set_xlim(0, 90)
 
-    axes[0].legend(title="GPU", fontsize=11)
+    axes[0].legend(title="GPU", fontsize=14, title_fontsize=15, loc="upper right")
 
     fig.suptitle(
         f"Kernel DRAM Bandwidth Relative Performance  "
         f"({nthreads} thread, {nevent} events)",
-        fontsize=14)
+        fontsize=20)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)

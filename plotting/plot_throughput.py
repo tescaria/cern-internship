@@ -42,12 +42,12 @@ def main():
 
     # GPUs and their csv files
     gpu_files = {
-        "NVIDIA Tesla T4": "/eos/user/t/tcostaes/traccc_outputs/full/lxplus.csv",
-        "NVIDIA RTX 5000 Ada": "/eos/user/t/tcostaes/traccc_outputs/full/v2_mldev02.csv",
+        "NVIDIA Tesla T4": "/eos/user/t/tcostaes/traccc_outputs/roi/lxplus.csv",
+        "NVIDIA RTX 5000 Ada": "/eos/user/t/tcostaes/traccc_outputs/roi/v2_mldev02.csv",
         #"NVIDIA RTX A5000": "/eos/user/t/tcostaes/traccc_outputs/full/v2_mldev01.csv",
         #"NVIDIA A100-PCIE-40GB": "/eos/user/t/tcostaes/traccc_outputs/full/a100.csv",
         #"NVIDIA H100L-2-24C MIG 2g.24gb": "/eos/user/t/tcostaes/traccc_outputs/full/h100_24c.csv",
-        "NVIDIA H100 NVL": "/eos/user/t/tcostaes/traccc_outputs/full/h100_nvl.csv",
+        "NVIDIA H100 NVL": "/eos/user/t/tcostaes/traccc_outputs/roi/h100_nvl.csv",
         #"NVIDIA H100L-1-12C MIG 1g.12gb": "/eos/user/t/tcostaes/traccc_outputs/full/h100_12c.csv"
         
     }
@@ -73,7 +73,7 @@ def main():
     for path in gpu_files.values():
         data = preprocess_data(path)
         x, y, _ = aggregate_by_threads(data)
-        mask = x <= 12
+        mask = x <= 25
         x = x[mask]
         y = y[mask]
         all_x.extend(x)
@@ -87,23 +87,24 @@ def main():
     h_frame = c.DrawFrame(ax_xmin, ax_ymin, ax_xmax, ax_ymax)
     h_frame.GetXaxis().SetTitle("Number of threads")
     h_frame.GetYaxis().SetTitle("Throughput [events/s]")
-    h_frame.GetYaxis().SetTitleOffset(1.6)
+    h_frame.GetYaxis().SetTitleOffset(1.7)
 
     # legend for full case
-    leg = root.TLegend(0.57, 0.35, 0.87, 0.48)
+    #leg = root.TLegend(0.57, 0.35, 0.87, 0.48)
     # legend for regional case
-    #leg = root.TLegend(0.15, 0.75, 0.45, 0.88)
+    leg = root.TLegend(0.15, 0.75, 0.45, 0.88)
     leg.SetTextSize(18) 
     leg.SetBorderSize(0)
 
     graphs = []
     smooth_graphs = []
     splines = []
+    oom_graphs = []
     for (gpu, path), color in zip(gpu_files.items(), colors):
 
         data = preprocess_data(path)
         x, y, yerr = aggregate_by_threads(data)
-        mask = x <= 12
+        mask = x <= 25
         x = x[mask]
         y = y[mask]
         yerr = yerr[mask]
@@ -124,6 +125,17 @@ def main():
         graph_smooth.SetLineWidth(2)
         graph_smooth.Draw("L same")
 
+        # Mark out-of-memory point (last point for Tesla and Ada)
+        if 1==2:
+            if gpu in ["NVIDIA Tesla T4", "NVIDIA RTX 5000 Ada"]:
+                oom_graph = root.TGraph(1)
+                oom_graph.SetPoint(0, x[-1], y[-1])
+                oom_graph.SetMarkerStyle(20)   # filled circle
+                oom_graph.SetMarkerColor(root.kRed + 2)
+                oom_graph.SetMarkerSize(1.4)
+                oom_graph.Draw("P same")
+                oom_graphs.append(oom_graph)
+
         leg.AddEntry(graph, gpu, "EP")
 
         graphs.append(graph)
@@ -133,15 +145,15 @@ def main():
     leg.Draw()
 
     # ATLAS-style annotation
-    tl = root.TLatex()
+    tl = root.TLatex()  
     tl.SetNDC()
     tl.SetTextSize(22)
-    tl.DrawLatex(0.60, 0.29, "#bf{Full Detector Data}")
+    tl.DrawLatex(0.60, 0.29, "#bf{Regions of Interest (RoI)}")
     tl.SetTextSize(20)
     tl.DrawLatex(0.60, 0.25, "#sqrt{s} = 14 TeV, <#mu> = 200, t#bar{t}")
     tl.DrawLatex(0.60, 0.21, "ITk Layout: 03-00-01")
 
-    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/throughput/events/full_3gpu.pdf")
+    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/throughput/events/roi_3gpu_allThreads.pdf")
 
 
 if __name__ == '__main__':
