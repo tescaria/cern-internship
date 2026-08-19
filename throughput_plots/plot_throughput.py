@@ -42,12 +42,12 @@ def main():
 
     # GPUs and their csv files
     gpu_files = {
-        "NVIDIA Tesla T4": "/eos/user/t/tcostaes/traccc_outputs/roi/lxplus.csv",
-        "NVIDIA RTX 5000 Ada": "/eos/user/t/tcostaes/traccc_outputs/roi/v2_mldev02.csv",
+        "NVIDIA Tesla T4": "/eos/user/t/tcostaes/traccc_outputs/superroi/lxplus.csv",
+        "NVIDIA RTX 5000 Ada": "/eos/user/t/tcostaes/traccc_outputs/superroi/v2_mldev02.csv",
         #"NVIDIA RTX A5000": "/eos/user/t/tcostaes/traccc_outputs/full/v2_mldev01.csv",
         #"NVIDIA A100-PCIE-40GB": "/eos/user/t/tcostaes/traccc_outputs/full/a100.csv",
         #"NVIDIA H100L-2-24C MIG 2g.24gb": "/eos/user/t/tcostaes/traccc_outputs/full/h100_24c.csv",
-        "NVIDIA H100 NVL": "/eos/user/t/tcostaes/traccc_outputs/roi/h100_nvl.csv",
+        "NVIDIA H100 NVL": "/eos/user/t/tcostaes/traccc_outputs/superroi/h100_nvl.csv",
         #"NVIDIA H100L-1-12C MIG 1g.12gb": "/eos/user/t/tcostaes/traccc_outputs/full/h100_12c.csv"
         
     }
@@ -66,6 +66,7 @@ def main():
     orange = root.TColor.GetColor("#ff7f0e")  # tab:orange
     green = root.TColor.GetColor("#2ca02c")   # tab:green
     colors = [blue, orange, green]
+    #colors = [blue, green]
 
     all_x = []
     all_y = []
@@ -91,8 +92,13 @@ def main():
 
     # legend for full case
     #leg = root.TLegend(0.57, 0.35, 0.87, 0.48)
+
     # legend for regional case
-    leg = root.TLegend(0.15, 0.75, 0.45, 0.88)
+    #leg = root.TLegend(0.15, 0.75, 0.45, 0.88)
+
+    # legend superRoI case
+    leg = root.TLegend(0.57, 0.43, 0.87, 0.55)
+
     leg.SetTextSize(18) 
     leg.SetBorderSize(0)
 
@@ -126,8 +132,8 @@ def main():
         graph_smooth.Draw("L same")
 
         # Mark out-of-memory point (last point for Tesla and Ada)
-        if 1==2:
-            if gpu in ["NVIDIA Tesla T4", "NVIDIA RTX 5000 Ada"]:
+        if 1==1:
+            if gpu in ["NVIDIA Tesla T4"]:
                 oom_graph = root.TGraph(1)
                 oom_graph.SetPoint(0, x[-1], y[-1])
                 oom_graph.SetMarkerStyle(20)   # filled circle
@@ -148,12 +154,15 @@ def main():
     tl = root.TLatex()  
     tl.SetNDC()
     tl.SetTextSize(22)
-    tl.DrawLatex(0.60, 0.29, "#bf{Regions of Interest (RoI)}")
+    #tl.DrawLatex(0.60, 0.29, "#bf{Regions of Interest (RoI)}")
+    tl.DrawLatex(0.60, 0.37, "#bf{Jet Regions of Interest}")
     tl.SetTextSize(20)
-    tl.DrawLatex(0.60, 0.25, "#sqrt{s} = 14 TeV, <#mu> = 200, t#bar{t}")
-    tl.DrawLatex(0.60, 0.21, "ITk Layout: 03-00-01")
+    #tl.DrawLatex(0.60, 0.25, "#sqrt{s} = 14 TeV, <#mu> = 200, t#bar{t}")
+    #tl.DrawLatex(0.60, 0.21, "ITk Layout: 03-00-01")
+    tl.DrawLatex(0.60, 0.33, "#sqrt{s} = 14 TeV")
+    tl.DrawLatex(0.60, 0.29, "ITk Layout: 03-00-01")
 
-    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/throughput/events/roi_3gpu_allThreads.pdf")
+    c.SaveAs("/eos/user/t/tcostaes/traccc_outputs/plots/throughput/events/superroi_3gpu_allThreads.pdf")
 
 
 if __name__ == '__main__':

@@ -10,5 +10,5 @@ This repository works together with my fork of traccc:
 
 - traccc: https://github.com/tescaria/traccc
 
-The traccc repository contains code modifications and software development.
+The traccc repository contains code modifications.
 
